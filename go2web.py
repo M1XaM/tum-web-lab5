@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 HELP_TEXT = """go2web -u <URL>         # make an HTTP request to the specified URL and print the response
 go2web -s <search-term> # make an HTTP request to search the term using your favorite search engine and print top 10 results
 go2web -u <URL> --redirect-count <N> # optional with -u only: follow up to N redirects (default: 0)
+go2web --no-cache ...   # optional: force network fetch and skip cache usage for this request
 go2web -h               # show this help"""
 
 
@@ -179,11 +180,12 @@ def open_socket(host: str, port: int, use_tls: bool) -> socket.socket:
     return sock
 
 
-def make_request(url: str, max_redirects: int = 0) -> Tuple[int, Dict[str, str], bytes, str, bool]:
-    cached_response = get_cached_response(url, max_redirects)
-    if cached_response is not None:
-        status, headers, body, final_url = cached_response
-        return status, headers, body, final_url, True
+def make_request(url: str, max_redirects: int = 0, use_cache: bool = True) -> Tuple[int, Dict[str, str], bytes, str, bool]:
+    if use_cache:
+        cached_response = get_cached_response(url, max_redirects)
+        if cached_response is not None:
+            status, headers, body, final_url = cached_response
+            return status, headers, body, final_url, True
 
     current_url = url
     redirects_followed = 0
@@ -268,14 +270,15 @@ def make_request(url: str, max_redirects: int = 0) -> Tuple[int, Dict[str, str],
             current_url = next_url
             continue
 
-        store_cached_response(
-            url=url,
-            max_redirects=max_redirects,
-            status=status_code,
-            headers=headers,
-            body=body,
-            final_url=current_url,
-        )
+        if use_cache:
+            store_cached_response(
+                url=url,
+                max_redirects=max_redirects,
+                status=status_code,
+                headers=headers,
+                body=body,
+                final_url=current_url,
+            )
         return status_code, headers, body, current_url, False
 
     raise HTTPError("Too many redirects")
@@ -344,9 +347,9 @@ def extract_search_results(page_url: str, html_text: str, limit: int = 10) -> Li
     return results
 
 
-def command_fetch_url(url: str, redirect_count: int = 0) -> int:
+def command_fetch_url(url: str, redirect_count: int = 0, use_cache: bool = True) -> int:
     try:
-        status, headers, body, _, is_cached = make_request(url, max_redirects=redirect_count)
+        status, headers, body, _, is_cached = make_request(url, max_redirects=redirect_count, use_cache=use_cache)
         text = decode_body(body, headers)
         print(f"HTTP {status}\n")
         if is_cached:
@@ -367,12 +370,12 @@ def command_fetch_url(url: str, redirect_count: int = 0) -> int:
         return 1
 
 
-def command_search(term: str) -> int:
+def command_search(term: str, use_cache: bool = True) -> int:
     query = quote_plus(term)
     search_url = f"https://lite.duckduckgo.com/lite/?q={query}"
 
     try:
-        status, headers, body, final_url, _ = make_request(search_url, max_redirects=0)
+        status, headers, body, final_url, _ = make_request(search_url, max_redirects=0, use_cache=use_cache)
         if status >= 400:
             print(f"Search request failed with HTTP {status}", file=sys.stderr)
             return 1
@@ -399,6 +402,11 @@ def command_search(term: str) -> int:
 
 def main(argv: List[str]) -> int:
     args = argv[1:]
+
+    no_cache = False
+    if "--no-cache" in args:
+        no_cache = True
+        args = [token for token in args if token != "--no-cache"]
 
     if not args or "-h" in args:
         print(HELP_TEXT)
@@ -437,7 +445,7 @@ def main(argv: List[str]) -> int:
             print(HELP_TEXT)
             return 1
 
-        return command_fetch_url(url, redirect_count=redirect_count)
+        return command_fetch_url(url, redirect_count=redirect_count, use_cache=not no_cache)
 
     if "-s" in args:
         if "--redirect-count" in args:
@@ -453,7 +461,7 @@ def main(argv: List[str]) -> int:
         if not term:
             print("Error: empty search term", file=sys.stderr)
             return 1
-        return command_search(term)
+        return command_search(term, use_cache=not no_cache)
 
     print("Error: unknown arguments", file=sys.stderr)
     print(HELP_TEXT)
