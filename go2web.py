@@ -72,6 +72,7 @@ def command_search(
     use_cache: bool = True,
     accept_mode: str = "html",
     accept_header: str = ACCEPT_OPTIONS["html"],
+    access_index: int | None = None,
 ) -> int:
     query = quote_plus(term)
     search_url = f"https://lite.duckduckgo.com/lite/?q={query}"
@@ -101,6 +102,22 @@ def command_search(
         if not results:
             print("No results found.")
             return 0
+
+        if access_index is not None:
+            if access_index > len(results):
+                print(
+                    f"Error: --access {access_index} is out of range for available results ({len(results)})",
+                    file=sys.stderr,
+                )
+                return 1
+            target_url = results[access_index - 1][1]
+            return command_fetch_url(
+                target_url,
+                redirect_count=0,
+                use_cache=use_cache,
+                accept_mode=accept_mode,
+                accept_header=accept_header,
+            )
 
         for idx, (title, url) in enumerate(results, start=1):
             print(f"{idx}. {title}")
@@ -141,6 +158,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="both",
         help="Preferred response content type for requests",
     )
+    parser.add_argument(
+        "--access",
+        type=int,
+        help="With -s, fetch the N-th search result (1-10)",
+    )
     return parser
 
 
@@ -156,6 +178,9 @@ def main(argv: list[str]) -> int:
     accept_header = ACCEPT_OPTIONS[args.accept]
 
     if args.url:
+        if args.access is not None:
+            print("Error: --access can only be used with -s", file=sys.stderr)
+            return 1
         return command_fetch_url(
             args.url,
             redirect_count=args.redirect_count,
@@ -168,6 +193,10 @@ def main(argv: list[str]) -> int:
         print("Error: --redirect-count can only be used with -u", file=sys.stderr)
         return 1
 
+    if args.access is not None and not (1 <= args.access <= 10):
+        print("Error: --access must be an integer from 1 to 10", file=sys.stderr)
+        return 1
+
     term = " ".join(args.search).strip()
     if not term:
         print("Error: empty search term", file=sys.stderr)
@@ -177,6 +206,7 @@ def main(argv: list[str]) -> int:
         use_cache=use_cache,
         accept_mode=args.accept,
         accept_header=accept_header,
+        access_index=args.access,
     )
 
 
