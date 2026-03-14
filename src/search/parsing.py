@@ -1,7 +1,17 @@
 import html
+import json
 import re
 from typing import Dict, List, Tuple
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
+
+
+def get_content_category(headers: Dict[str, str]) -> str:
+    content_type = headers.get("content-type", "").lower()
+    if "application/json" in content_type or content_type.endswith("+json"):
+        return "json"
+    if "text/html" in content_type or "application/xhtml+xml" in content_type:
+        return "html"
+    return "other"
 
 
 def decode_body(body: bytes, headers: Dict[str, str]) -> str:
@@ -14,6 +24,23 @@ def decode_body(body: bytes, headers: Dict[str, str]) -> str:
         return body.decode(charset, errors="replace")
     except LookupError:
         return body.decode("utf-8", errors="replace")
+
+
+def format_response_body(body: bytes, headers: Dict[str, str]) -> str:
+    text = decode_body(body, headers)
+    content_category = get_content_category(headers)
+
+    if content_category == "json":
+        try:
+            parsed = json.loads(text)
+            return json.dumps(parsed, indent=2, ensure_ascii=False)
+        except json.JSONDecodeError:
+            return text
+
+    if content_category == "html":
+        return text
+
+    return text
 
 
 def strip_tags(text: str) -> str:

@@ -31,13 +31,13 @@ def save_cache(cache: Dict[str, Dict[str, Any]]) -> None:
     os.replace(temp_file, CACHE_FILE)
 
 
-def make_cache_key(url: str, max_redirects: int) -> str:
-    return f"{url}::redirects={max_redirects}"
+def make_cache_key(url: str, max_redirects: int, accept_header: str) -> str:
+    return f"{url}::redirects={max_redirects}::accept={accept_header}"
 
 
-def get_cached_response(url: str, max_redirects: int) -> Optional[Tuple[int, Dict[str, str], bytes, str]]:
+def get_cached_response(url: str, max_redirects: int, accept_header: str) -> Optional[Tuple[int, Dict[str, str], bytes, str]]:
     cache = load_cache()
-    key = make_cache_key(url, max_redirects)
+    key = make_cache_key(url, max_redirects, accept_header)
     entry = cache.get(key)
     if not isinstance(entry, dict):
         return None
@@ -78,6 +78,7 @@ def get_cached_response(url: str, max_redirects: int) -> Optional[Tuple[int, Dic
 def store_cached_response(
     url: str,
     max_redirects: int,
+    accept_header: str,
     status: int,
     headers: Dict[str, str],
     body: bytes,
@@ -87,7 +88,7 @@ def store_cached_response(
         return
 
     cache = load_cache()
-    key = make_cache_key(url, max_redirects)
+    key = make_cache_key(url, max_redirects, accept_header)
     cache[key] = {
         "cached_at": time.time(),
         "status": status,

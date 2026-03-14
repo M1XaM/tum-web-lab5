@@ -51,9 +51,14 @@ def open_socket(host: str, port: int, use_tls: bool) -> socket.socket:
     return sock
 
 
-def make_request(url: str, max_redirects: int = 0, use_cache: bool = True) -> Tuple[int, Dict[str, str], bytes, str, bool]:
+def make_request(
+    url: str,
+    max_redirects: int = 0,
+    use_cache: bool = True,
+    accept_header: str = "application/json, text/html;q=0.9, */*;q=0.8",
+) -> Tuple[int, Dict[str, str], bytes, str, bool]:
     if use_cache:
-        cached_response = get_cached_response(url, max_redirects)
+        cached_response = get_cached_response(url, max_redirects, accept_header)
         if cached_response is not None:
             status, headers, body, final_url = cached_response
             return status, headers, body, final_url, True
@@ -86,7 +91,7 @@ def make_request(url: str, max_redirects: int = 0, use_cache: bool = True) -> Tu
             f"GET {path} HTTP/1.1\r\n"
             f"Host: {host_header}\r\n"
             "User-Agent: go2web/1.0\r\n"
-            "Accept: */*\r\n"
+            f"Accept: {accept_header}\r\n"
             "Accept-Encoding: identity\r\n"
             "Connection: close\r\n"
             "\r\n"
@@ -146,6 +151,7 @@ def make_request(url: str, max_redirects: int = 0, use_cache: bool = True) -> Tu
             store_cached_response(
                 url=url,
                 max_redirects=max_redirects,
+                accept_header=accept_header,
                 status=status_code,
                 headers=headers,
                 body=body,
