@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+import base64
 import html
+import json
+import os
 import re
 import socket
 import ssl
 import sys
-from typing import Dict, List, Optional, Tuple
+import time
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
 
@@ -12,6 +16,11 @@ HELP_TEXT = """go2web -u <URL>         # make an HTTP request to the specified U
 go2web -s <search-term> # make an HTTP request to search the term using your favorite search engine and print top 10 results
 go2web -u <URL> --redirect-count <N> # optional with -u only: follow up to N redirects (default: 0)
 go2web -h               # show this help"""
+
+
+CACHE_TTL_SECONDS = 300
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_FILE = os.path.join(BASE_DIR, ".go2web_http_cache.json")
 
 
 class HTTPError(Exception):
@@ -36,6 +45,98 @@ class RedirectLimitReached(HTTPError):
         self.body = body
         self.raw_response = raw_response
         self.next_url = next_url
+
+
+def load_cache() -> Dict[str, Dict[str, Any]]:
+    if not os.path.exists(CACHE_FILE):
+        return {}
+
+    try:
+        with open(CACHE_FILE, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def save_cache(cache: Dict[str, Dict[str, Any]]) -> None:
+    directory = os.path.dirname(CACHE_FILE)
+    os.makedirs(directory, exist_ok=True)
+
+    temp_file = f"{CACHE_FILE}.tmp"
+    with open(temp_file, "w", encoding="utf-8") as fp:
+        json.dump(cache, fp)
+    os.replace(temp_file, CACHE_FILE)
+
+
+def make_cache_key(url: str, max_redirects: int) -> str:
+    return f"{url}::redirects={max_redirects}"
+
+
+def get_cached_response(url: str, max_redirects: int) -> Optional[Tuple[int, Dict[str, str], bytes, str]]:
+    cache = load_cache()
+    key = make_cache_key(url, max_redirects)
+    entry = cache.get(key)
+    if not isinstance(entry, dict):
+        return None
+
+    cached_at = entry.get("cached_at")
+    if not isinstance(cached_at, (int, float)):
+        return None
+
+    if time.time() - float(cached_at) > CACHE_TTL_SECONDS:
+        del cache[key]
+        save_cache(cache)
+        return None
+
+    status = entry.get("status")
+    headers = entry.get("headers")
+    body_b64 = entry.get("body_b64")
+    final_url = entry.get("final_url")
+
+    if not isinstance(status, int):
+        return None
+    if not isinstance(headers, dict):
+        return None
+    if not isinstance(body_b64, str):
+        return None
+    if not isinstance(final_url, str):
+        return None
+
+    normalized_headers = {str(k): str(v) for k, v in headers.items()}
+
+    try:
+        body = base64.b64decode(body_b64.encode("ascii"), validate=True)
+    except (ValueError, OSError):
+        return None
+
+    return status, normalized_headers, body, final_url
+
+
+def store_cached_response(
+    url: str,
+    max_redirects: int,
+    status: int,
+    headers: Dict[str, str],
+    body: bytes,
+    final_url: str,
+) -> None:
+    if status >= 400:
+        return
+
+    cache = load_cache()
+    key = make_cache_key(url, max_redirects)
+    cache[key] = {
+        "cached_at": time.time(),
+        "status": status,
+        "headers": headers,
+        "body_b64": base64.b64encode(body).decode("ascii"),
+        "final_url": final_url,
+    }
+    save_cache(cache)
 
 
 def parse_headers(raw_headers: str) -> Dict[str, str]:
@@ -78,7 +179,12 @@ def open_socket(host: str, port: int, use_tls: bool) -> socket.socket:
     return sock
 
 
-def make_request(url: str, max_redirects: int = 0) -> Tuple[int, Dict[str, str], bytes, str]:
+def make_request(url: str, max_redirects: int = 0) -> Tuple[int, Dict[str, str], bytes, str, bool]:
+    cached_response = get_cached_response(url, max_redirects)
+    if cached_response is not None:
+        status, headers, body, final_url = cached_response
+        return status, headers, body, final_url, True
+
     current_url = url
     redirects_followed = 0
 
@@ -162,7 +268,15 @@ def make_request(url: str, max_redirects: int = 0) -> Tuple[int, Dict[str, str],
             current_url = next_url
             continue
 
-        return status_code, headers, body, current_url
+        store_cached_response(
+            url=url,
+            max_redirects=max_redirects,
+            status=status_code,
+            headers=headers,
+            body=body,
+            final_url=current_url,
+        )
+        return status_code, headers, body, current_url, False
 
     raise HTTPError("Too many redirects")
 
@@ -232,10 +346,14 @@ def extract_search_results(page_url: str, html_text: str, limit: int = 10) -> Li
 
 def command_fetch_url(url: str, redirect_count: int = 0) -> int:
     try:
-        status, headers, body, _ = make_request(url, max_redirects=redirect_count)
+        status, headers, body, _, is_cached = make_request(url, max_redirects=redirect_count)
         text = decode_body(body, headers)
         print(f"HTTP {status}\n")
+        if is_cached:
+            print("Cached response")
         print(text)
+        if is_cached:
+            print("Cached response")
         return 0
     except RedirectLimitReached as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -254,7 +372,7 @@ def command_search(term: str) -> int:
     search_url = f"https://lite.duckduckgo.com/lite/?q={query}"
 
     try:
-        status, headers, body, final_url = make_request(search_url, max_redirects=0)
+        status, headers, body, final_url, _ = make_request(search_url, max_redirects=0)
         if status >= 400:
             print(f"Search request failed with HTTP {status}", file=sys.stderr)
             return 1
