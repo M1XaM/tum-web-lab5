@@ -1,6 +1,7 @@
 import html
 import json
 import re
+from html.parser import HTMLParser
 from typing import Dict, List, Tuple
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
@@ -12,6 +13,66 @@ def get_content_category(headers: Dict[str, str]) -> str:
     if "text/html" in content_type or "application/xhtml+xml" in content_type:
         return "html"
     return "other"
+
+
+class HTMLTextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: List[str] = []
+        self.skip_depth = 0
+        self.block_tags = {
+            "p",
+            "div",
+            "br",
+            "li",
+            "ul",
+            "ol",
+            "section",
+            "article",
+            "header",
+            "footer",
+            "main",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "tr",
+            "table",
+        }
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, str | None]]) -> None:
+        if tag in {"script", "style", "noscript"}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth == 0 and tag in self.block_tags:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "noscript"}:
+            if self.skip_depth > 0:
+                self.skip_depth -= 1
+            return
+        if self.skip_depth == 0 and tag in self.block_tags:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self.skip_depth > 0:
+            return
+        if data and data.strip():
+            self.parts.append(data)
+
+
+def html_to_readable_text(html_text: str) -> str:
+    extractor = HTMLTextExtractor()
+    extractor.feed(html_text)
+    extractor.close()
+
+    text = "".join(extractor.parts)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    return text.strip()
 
 
 def decode_body(body: bytes, headers: Dict[str, str]) -> str:
@@ -26,7 +87,7 @@ def decode_body(body: bytes, headers: Dict[str, str]) -> str:
         return body.decode("utf-8", errors="replace")
 
 
-def format_response_body(body: bytes, headers: Dict[str, str]) -> str:
+def format_response_body(body: bytes, headers: Dict[str, str], raw_html: bool = False) -> str:
     text = decode_body(body, headers)
     content_category = get_content_category(headers)
 
@@ -38,6 +99,11 @@ def format_response_body(body: bytes, headers: Dict[str, str]) -> str:
             return text
 
     if content_category == "html":
+        if raw_html:
+            return text
+        return html_to_readable_text(text)
+
+    if content_category == "other":
         return text
 
     return text

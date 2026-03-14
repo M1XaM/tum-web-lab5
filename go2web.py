@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 
 from src.http_client import HTTPError, make_request
 from src.redirection.redirects import RedirectLimitReached
-from src.search.parsing import extract_search_results, format_response_body, get_content_category
+from src.search.parsing import decode_body, extract_search_results, format_response_body, get_content_category
 
 
 ACCEPT_OPTIONS = {
@@ -30,6 +30,7 @@ def command_fetch_url(
     use_cache: bool = True,
     accept_mode: str = "both",
     accept_header: str = ACCEPT_OPTIONS["both"],
+    raw_html: bool = False,
 ) -> int:
     try:
         status, headers, body, _, is_cached = make_request(
@@ -47,7 +48,7 @@ def command_fetch_url(
             )
             return 1
 
-        text = format_response_body(body, headers)
+        text = format_response_body(body, headers, raw_html=raw_html)
         print(f"HTTP {status}\n")
         if is_cached:
             print("Cached response")
@@ -73,6 +74,7 @@ def command_search(
     accept_mode: str = "html",
     accept_header: str = ACCEPT_OPTIONS["html"],
     access_index: int | None = None,
+    raw_html: bool = False,
 ) -> int:
     query = quote_plus(term)
     search_url = f"https://lite.duckduckgo.com/lite/?q={query}"
@@ -96,7 +98,7 @@ def command_search(
             )
             return 1
 
-        page = format_response_body(body, headers)
+        page = decode_body(body, headers)
         results = extract_search_results(final_url, page, limit=10)
 
         if not results:
@@ -117,6 +119,7 @@ def command_search(
                 use_cache=use_cache,
                 accept_mode=accept_mode,
                 accept_header=accept_header,
+                raw_html=raw_html,
             )
 
         for idx, (title, url) in enumerate(results, start=1):
@@ -163,6 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="With -s, fetch the N-th search result (1-10)",
     )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="For HTML responses, print raw HTML instead of human-readable text",
+    )
     return parser
 
 
@@ -187,6 +195,7 @@ def main(argv: list[str]) -> int:
             use_cache=use_cache,
             accept_mode=args.accept,
             accept_header=accept_header,
+            raw_html=args.raw,
         )
 
     if args.redirect_count != 0:
@@ -207,6 +216,7 @@ def main(argv: list[str]) -> int:
         accept_mode=args.accept,
         accept_header=accept_header,
         access_index=args.access,
+        raw_html=args.raw,
     )
 
 
