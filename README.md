@@ -38,7 +38,7 @@ options:
 ./go2web.py -u https://example.com
 ```
 
-![Fetch URL demo](docs/gifs/fetch-url.gif)
+![Fetch URL demo](docs/gifs/access.gif)
 
 ---
 
@@ -50,7 +50,7 @@ options:
 ./go2web.py -s python cli
 ```
 
-![Search list demo](docs/gifs/search-list.gif)
+![Search list demo](docs/gifs/basic-search.gif)
 
 ---
 
@@ -60,11 +60,17 @@ options:
 ./go2web.py -u http://example.com --redirect-count 3
 ```
 
+```bash
+# default behavior (no redirects followed)
+./go2web.py -u http://example.com
+```
+
 Notes:
 - `--redirect-count` works only with `-u`.
 - If the limit is reached, the tool prints redirect debug info and exits with non-zero code.
 
-![Redirect count demo](docs/gifs/redirect-count.gif)
+![Redirects enabled demo](docs/gifs/allow-redirect.gif)
+![Redirects disabled demo](docs/gifs/no-redirect.gif)
 
 ---
 
@@ -77,7 +83,7 @@ Run the same request twice; the second response is served from cache and prints 
 ./go2web.py -u https://example.com
 ```
 
-![Cache hit demo](docs/gifs/cache-hit.gif)
+![Cache hit demo](docs/gifs/access-cached.gif)
 
 ---
 
@@ -85,10 +91,9 @@ Run the same request twice; the second response is served from cache and prints 
 
 ```bash
 ./go2web.py --no-cache -u https://example.com
-./go2web.py --no-cache -s "python"
 ```
 
-![No cache demo](docs/gifs/no-cache.gif)
+![No cache demo](docs/gifs/access-no-cache-enforce.gif)
 
 ---
 
@@ -118,7 +123,7 @@ Notes:
 - `--accept both` accepts either JSON or HTML/XHTML.
 - On mismatch, command fails with: `Error: content type mismatch (...)`.
 
-![Accept negotiation demo](docs/gifs/accept-negotiation.gif)
+![Accept negotiation demo](docs/gifs/access-type-negotiation.gif)
 
 ---
 
@@ -136,16 +141,16 @@ Notes:
 - Valid range is `1..10`.
 - If selected index is larger than available results, command fails with an error.
 
-![Access result demo](docs/gifs/access-result.gif)
+![Access result demo](docs/gifs/search-access.gif)
 
 ---
 
-## Error Cases
+### 8) Raw HTML output (disable auto human-readable conversion)
 
-- `--access` with `-u` → invalid usage error.
-- `--redirect-count` with `-s` → invalid usage error.
-- Negative `--redirect-count` → validation error.
-- Out-of-range `--access` → validation error.
-- Unsupported URL scheme (non-http/https) → request error.
+```bash
+./go2web.py -u https://example.com --accept html --raw
+./go2web.py -s "python" --access 1 --accept html --raw
+```
 
-![Error cases demo](docs/gifs/error-cases.gif)
+![Raw HTML URL demo](docs/gifs/access-raw.gif)
+![Raw HTML via search access demo](docs/gifs/search-access-raw.gif)

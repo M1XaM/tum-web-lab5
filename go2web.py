@@ -202,6 +202,10 @@ def main(argv: list[str]) -> int:
         print("Error: --redirect-count can only be used with -u", file=sys.stderr)
         return 1
 
+    if args.no_cache:
+        print("Error: --no-cache can only be used with -u", file=sys.stderr)
+        return 1
+
     if args.access is not None and not (1 <= args.access <= 10):
         print("Error: --access must be an integer from 1 to 10", file=sys.stderr)
         return 1
