@@ -7,6 +7,8 @@ Minimal CLI web fetch/search tool with caching, content negotiation, and optiona
 - Python 3.10+
 - Network access
 
+Note: For creating binary use `pyinstaller --onefile go2web.py`
+
 ## Quick Start
 
 ```bash

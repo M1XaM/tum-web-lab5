@@ -14,3 +14,8 @@ src/cache/cache.json
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# PyInstaller
+build/
+dist/
+*.spec
