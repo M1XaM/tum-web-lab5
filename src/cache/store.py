@@ -1,12 +1,22 @@
 import base64
 import json
 import os
+import sys
 import time
 from typing import Any, Dict, Optional, Tuple
 
 
 CACHE_TTL_SECONDS = 300
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.json")
+
+
+def get_cache_file_path() -> str:
+    if getattr(sys, "frozen", False):
+        binary_dir = os.path.dirname(os.path.abspath(sys.executable))
+        return os.path.join(binary_dir, "cache.json")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.json")
+
+
+CACHE_FILE = get_cache_file_path()
 
 
 def load_cache() -> Dict[str, Dict[str, Any]]:
@@ -25,6 +35,7 @@ def load_cache() -> Dict[str, Dict[str, Any]]:
 
 
 def save_cache(cache: Dict[str, Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     temp_file = f"{CACHE_FILE}.tmp"
     with open(temp_file, "w", encoding="utf-8") as cache_file:
         json.dump(cache, cache_file)
