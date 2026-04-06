@@ -26,7 +26,7 @@ options:
   --redirect-count REDIRECT_COUNT
                         Follow up to N redirects (only for -u)
   --no-cache            Always fetch from source and skip cache
-  --accept {json,html,both}
+  --accept {json,html,any}
                         Preferred response content type for requests
   --access ACCESS       With -s, fetch the N-th search result (1-10)
   --raw                 For HTML responses, print raw HTML instead of human-readable text
@@ -48,7 +48,7 @@ options:
 
 ```bash
 ./go2web.py -s "python cli"
-# or 
+# or
 ./go2web.py -s python cli
 ```
 
@@ -68,6 +68,7 @@ options:
 ```
 
 Notes:
+
 - `--redirect-count` works only with `-u`.
 - If the limit is reached, the tool prints redirect debug info and exits with non-zero code.
 
@@ -113,16 +114,17 @@ Run the same request twice; the second response is served from cache and prints 
 ./go2web.py --accept html -u https://example.com
 ```
 
-#### Accept both
+#### Accept any
 
 ```bash
-./go2web.py --accept both -u https://example.com
+./go2web.py --accept any -u https://example.com
 ```
 
 Notes:
+
 - `--accept json` requires JSON response content type.
 - `--accept html` requires HTML/XHTML response content type.
-- `--accept both` accepts either JSON or HTML/XHTML.
+- `--accept any` allows any response format.
 - On mismatch, command fails with: `Error: content type mismatch (...)`.
 
 ![Accept negotiation demo](docs/gifs/access-type-negotiation.gif)
@@ -139,6 +141,7 @@ Instead of listing only, this fetches the selected result URL.
 ```
 
 Notes:
+
 - `--access` works only with `-s`.
 - Valid range is `1..10`.
 - If selected index is larger than available results, command fails with an error.

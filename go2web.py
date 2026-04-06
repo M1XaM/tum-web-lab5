@@ -13,14 +13,14 @@ from src.search.parsing import decode_body, extract_search_results, format_respo
 ACCEPT_OPTIONS = {
     "json": "application/json, */*;q=0.8",
     "html": "text/html, application/xhtml+xml;q=0.9, */*;q=0.8",
-    "both": "application/json, text/html;q=0.9, */*;q=0.8",
+    "any": "*/*",
 }
 
 
 def is_content_type_acceptable(accept_mode: str, headers: dict[str, str]) -> bool:
     content_category = get_content_category(headers)
-    if accept_mode == "both":
-        return content_category in ("json", "html")
+    if accept_mode == "any":
+        return True
     return content_category == accept_mode
 
 
@@ -28,8 +28,8 @@ def command_fetch_url(
     url: str,
     redirect_count: int = 0,
     use_cache: bool = True,
-    accept_mode: str = "both",
-    accept_header: str = ACCEPT_OPTIONS["both"],
+    accept_mode: str = "any",
+    accept_header: str = ACCEPT_OPTIONS["any"],
     raw_html: bool = False,
 ) -> int:
     try:
@@ -157,8 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--accept",
-        choices=["json", "html", "both"],
-        default="both",
+        choices=["json", "html", "any"],
+        default="any",
         help="Preferred response content type for requests",
     )
     parser.add_argument(
